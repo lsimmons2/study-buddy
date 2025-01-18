@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+faiss-cpu   # Use 'faiss-gpu' if you want GPU acceleration
+pydantic
+requests
