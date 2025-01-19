@@ -1,0 +1,5 @@
+nltk
+fastapi
+uvicorn[standard]
+pydantic
+requests

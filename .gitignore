@@ -1,1 +1,2 @@
 *.pyc
+embedding-index/index_dumps/
