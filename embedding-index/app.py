@@ -13,6 +13,7 @@ app = FastAPI(
     title="Index embedding service",
     description="Service for managing and querying embeddings using FAISS")
 
+EMBEDDING_GEN_SERVICE_URL = "http://192.168.1.155:5000"
 
 faiss_index: FAISSIndex = FAISSIndex(dimension=768)
 index_ids_to_chunks_ids: List[str] = []
@@ -24,10 +25,9 @@ async def on_startup():
     print("Initializing FAISS index...")
     index_and_mapping  = initialize_index()
     faiss_index, index_ids_to_chunks_ids  = index_and_mapping
+    # SNIPPET - checking for dupes
     if len(index_ids_to_chunks_ids) != len(list(set(index_ids_to_chunks_ids))):
         raise Exception("There are dupes in mapping!")
-    else:
-        print("No dupes in mapping!")
     print("FAISS index ready.")
 
 
@@ -79,7 +79,7 @@ def load_faiss_index(file_path=INDEX_FILE_PATH):
 
 
 def load_index_id_map(file_path=INDEX_ID_MAP_FILE_PATH):
-    return None
+    # return None
     """
     Load the FAISS index from disk if it exists.
     """
@@ -166,7 +166,7 @@ def generate_embeddings(texts: List[str]) -> List[List[float]]:
     Call the embedding service to generate embeddings for the given texts.
     """
     response = requests.post(
-        "http://greta:5000/generate-embeddings",
+        f"{EMBEDDING_GEN_SERVICE_URL}/generate-embeddings",
         json={"sentences": texts},
     )
     response.raise_for_status()
