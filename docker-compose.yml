@@ -1,0 +1,73 @@
+x-common-environment: &sb-common-environment
+  TRANSCRIPT_SERVICE_URL: http://transcript-service:8001
+  NOTES_SERVICE_URL: http://notes-service:8002
+  EMBEDDING_GEN_SERVICE_URL: http://192.168.1.51:5000
+  EMBEDDING_INDEX_SERVICE_URL: http://embedding-index-service:8000
+  OLLAMA_SERVICE_URL: http://192.168.1.51:11434
+
+
+networks:
+  sb-network:
+    driver: bridge
+
+services:
+  embedding-index-service:
+    build: ./embedding-index
+    volumes:
+      - ./clients/python/embedding_service:/clients/embedding_service
+      - ./clients/python/transcript_service:/clients/transcript_service
+      - ./embedding-index:/app
+    environment:
+      <<: *sb-common-environment
+      PYTHONPATH: /clients/transcript_service:/clients/embedding_service
+    networks:
+      - sb-network
+    depends_on:
+      - transcript-service
+    ports:
+      - "8000:8000"
+    command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+  transcript-service:
+    build: ./script-stuff
+    volumes:
+      - /Users/leo/ai_transcripts/:/ai_transcripts
+      - ./script-stuff:/app
+    networks:
+      - sb-network
+    ports:
+      - "8001:8001"
+    command: uvicorn app:app --host 0.0.0.0 --port 8001 --reload
+
+  notes-service:
+    build: ./notes-service
+    volumes:
+      - /Users/leo/notes/:/notes
+      - ./notes-service:/app
+    networks:
+      - sb-network
+    ports:
+      - "8002:8002"
+    command: uvicorn app:app --host 0.0.0.0 --port 8002 --reload
+
+  question-answerer:
+    build: ./question-answerer
+    volumes:
+      - ./clients/python/embedding_service:/clients/embedding_service
+      - ./clients/python/transcript_service:/clients/transcript_service
+      - ./clients/python/notes_service:/clients/notes_service
+      - ./clients/python/embedding_index_service:/clients/embedding_index_service
+      - ./question-answerer:/app
+    environment:
+      <<: *sb-common-environment
+      PYTHONPATH: /clients/embedding_service:/clients/transcript_service:/clients/notes_service:/clients/embedding_index_service
+    networks:
+      - sb-network
+    ports:
+      - "8003:8003"
+    depends_on:
+      - embedding-index-service
+      - transcript-service
+      - notes-service
+    command: uvicorn app:app --host 0.0.0.0 --port 8003 --reload
+

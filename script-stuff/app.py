@@ -135,13 +135,11 @@ def get_chunk_by_id(chunk_id: str) -> Optional[TranscriptChunk]:
         return None
     chunks = break_script_into_chunks(script)
     c_ts = [c["text"] for c in chunks]
-    if len(c_ts) != len(list(set(c_ts))):
-        print("there are dupes in these chunks!!!!!!")
-    else:
-        print("there are no dupes in these chunks!!!!!!")
-    print("chunk_index: %d" % (chunk_index))
+    # if len(c_ts) != len(list(set(c_ts))):
+    #     print("there are dupes in these chunks!!!!!!")
+    # else:
+    #     print("there are no dupes in these chunks!!!!!!")
     chunk = chunks[chunk_index]
-    print("chunk: %s" % (chunk))
     return chunk
 
 

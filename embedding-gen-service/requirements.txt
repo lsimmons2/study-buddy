@@ -1,5 +1,4 @@
 fastapi
 uvicorn[standard]
 pydantic
-requests
-python-dateutil>=2.8.0
+sentence-transformers

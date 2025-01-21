@@ -5,15 +5,29 @@ from models import AddEmbeddingsRequest, SearchRequest, SearchResponse
 import faiss
 from faiss_utils import FAISSIndex
 from typing import List, Optional, TypedDict
-import requests
 import os
 import numpy as np
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+
+from transcript_service_client import TranscriptChunk, TranscriptDetailsRest
+import transcript_service_client 
+transcript_config = transcript_service_client.Configuration(host=os.getenv("TRANSCRIPT_SERVICE_URL"))
+transcript_api_client = transcript_service_client.ApiClient(configuration=transcript_config)
+transcript_api = transcript_service_client.DefaultApi(transcript_api_client)
+
+
+import embedding_gen_service_client 
+embedding_gen_client = embedding_gen_service_client.ApiClient(
+    configuration=embedding_gen_service_client.Configuration(host=os.getenv("EMBEDDING_GEN_SERVICE_URL")))
+embedding_gen_api = embedding_gen_service_client.DefaultApi(embedding_gen_client)
+
+
 
 app = FastAPI(
     title="Index embedding service",
     description="Service for managing and querying embeddings using FAISS")
 
-EMBEDDING_GEN_SERVICE_URL = "http://192.168.1.155:5000"
 
 faiss_index: FAISSIndex = FAISSIndex(dimension=768)
 index_ids_to_chunks_ids: List[str] = []
@@ -31,26 +45,12 @@ async def on_startup():
     print("FAISS index ready.")
 
 
-
-
-class TranscriptChunk(TypedDict):
-    id: str
-    timeStamp: int
-    text: str
-
-class TranscriptDetailsRest(TypedDict):
-    id: str
-    name: str
-    chunks: List[TranscriptChunk]
-
-TRANSCRIPT_SERVICE_URL = "http://transcript-service:8001"
-
-
 INDEX_DIR = "index_dumps/"
 INDEX_FILE_PATH = os.path.join(INDEX_DIR, "index.faiss")
 INDEX_ID_MAP_FILE_PATH = os.path.join(INDEX_DIR, "index_id_map.json")
 
 
+print("**** we in embedding-index service!!!!!!!!!!!!")
 def save_faiss_index(index, file_path=INDEX_FILE_PATH):
     """
     Save the FAISS index to disk.
@@ -64,7 +64,6 @@ def save_faiss_index(index, file_path=INDEX_FILE_PATH):
 
 
 def load_faiss_index(file_path=INDEX_FILE_PATH):
-    # return None
     """
     Load the FAISS index from disk if it exists.
     """
@@ -79,7 +78,6 @@ def load_faiss_index(file_path=INDEX_FILE_PATH):
 
 
 def load_index_id_map(file_path=INDEX_ID_MAP_FILE_PATH):
-    # return None
     """
     Load the FAISS index from disk if it exists.
     """
@@ -119,18 +117,23 @@ def initialize_index():
     all_ids = []
     index = faiss.IndexFlatL2(768)  # Replace with the appropriate FAISS index type and dimension
     # Fetch all script metadata
-    scripts = fetch_all_scripts()
+    scripts = transcript_api.list_scripts_scripts_get()
+    print("***scripts returned be:", scripts)
     for script_meta in scripts:
-        script_id = script_meta["id"]
+        script_id = script_meta.id
         print(f"Fetching details for script ID: {script_id}")
 
         # Fetch full transcript details
-        script = fetch_script_by_id(script_id)
+        script = transcript_api.fetch_script_by_id_scripts_id_get(script_id)
 
-        chunk_texts = [c["text"] for c in script["chunks"]]
+        chunk_texts = [c.text for c in script.chunks]
         print(f"Found {len(chunk_texts)} chunks in script ID: {script_id}")
 
-        embeddings = generate_embeddings(chunk_texts)
+        # embeddings = generate_embeddings(chunk_texts)
+        print("about to hit embedding api!!!")
+        embeddings = embedding_gen_api\
+            .generate_embeddings_generate_embeddings_post({"sentences":chunk_texts}).embeddings
+        # print("got emebddings!:", embeddings)
         ids: List[str] = [f"{script_id}-{i}" for i in range(len(chunk_texts))]
         index.add(np.array(embeddings, dtype=np.float32))
         all_ids = all_ids + ids
@@ -139,38 +142,6 @@ def initialize_index():
     save_faiss_index(index)
     write_index_id_map(all_ids)
     return index, all_ids
-
-
-def fetch_all_scripts() -> List[dict]:
-    """
-    Fetch the list of script metadata (id and name) from the transcript service.
-    """
-    url = f"{TRANSCRIPT_SERVICE_URL}/scripts"
-    print("htting url: %s" % (url))
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()  # Returns a list of dicts with 'id' and 'name'
-
-
-def fetch_script_by_id(script_id: str) -> TranscriptDetailsRest:
-    """
-    Fetch the full transcript details for a given script ID.
-    """
-    response = requests.get(f"{TRANSCRIPT_SERVICE_URL}/scripts/{script_id}")
-    response.raise_for_status()
-    return response.json()  # Returns a Transcript object
-
-
-def generate_embeddings(texts: List[str]) -> List[List[float]]:
-    """
-    Call the embedding service to generate embeddings for the given texts.
-    """
-    response = requests.post(
-        f"{EMBEDDING_GEN_SERVICE_URL}/generate-embeddings",
-        json={"sentences": texts},
-    )
-    response.raise_for_status()
-    return response.json()["embeddings"]
 
 
 @app.get("/ping", response_model=str)
@@ -192,6 +163,7 @@ def search_embeddings(request: SearchRequest):
         return {"results": [
             {"id": index_ids_to_chunks_ids[id], "distance":d}
             for id, d in zip(ids.flatten().tolist(), distances.flatten().tolist())]}
+    # SNIPPET
     except Exception as e:
         print("um hola???: %s" % (e))
         traceback.print_exc()

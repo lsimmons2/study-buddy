@@ -3,3 +3,4 @@ uvicorn[standard]
 faiss-cpu   # Use 'faiss-gpu' if you want GPU acceleration
 pydantic
 requests
+python-dateutil>=2.8.0
